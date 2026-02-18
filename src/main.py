@@ -6,7 +6,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 
 import numpy as np
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 
 # ENU <-> spherical (pls dont touch unless you like debugging trig)
@@ -170,9 +170,9 @@ def compute_table1_sigmas(p: Params, sim: dict):
     dt = p.t_rho - p.t0
     n = p.n
 
-    sigma_vdelta_pos = np.sqrt((2 * p.sigma_w**2 / n) / (dt**2))
+    sigma_vdelta_pos = np.sqrt((2 * p.sigma_w**2 / n) / (dt))  # from eq. 33
     sigma_vL_pos = np.sqrt(
-        ((p.sigma_w**2 / n) + p.sigma_p**2) / (dt**2) + p.sigma_vc**2
+        ((p.sigma_w**2 / n) + p.sigma_p**2) / (dt) + p.sigma_vc
     )
 
     sigma_v_2pt = np.sqrt((2 * p.sigma_w**2) / (dt**2))
