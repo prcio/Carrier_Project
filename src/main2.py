@@ -15,7 +15,8 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, asdict
 
- from pathlib import Path
+from pathlib import Path
+
 #
 import numpy as np
 import matplotlib
@@ -169,32 +170,36 @@ class Params:
 # Core sim
 # -----------------------------------------------------------------------------
 
+
 def run_sim(p: Params):
     rng = np.random.default_rng(p.seed)
     n = p.n
     dt = p.t_rho - p.t0
 
-    xc = np.array(p.xc_m,   dtype=float)
+    xc = np.array(p.xc_m, dtype=float)
     vc = np.array(p.vc_mps, dtype=float)
 
     alpha_c = np.deg2rad(p.alpha_c_deg)
-    eps_c   = np.deg2rad(p.eps_c_deg)
+    eps_c = np.deg2rad(p.eps_c_deg)
 
     # Step 1
-    angles = 2.0 * np.pi * np.arange(1, n + 1) / n   # i = 1..n
-    v_unit_circle = np.stack([
-        np.sin(angles),         # x
-        np.cos(angles),         # y
-        np.zeros_like(angles),  # z
-    ], axis=1)
+    angles = 2.0 * np.pi * np.arange(1, n + 1) / n  # i = 1..n
+    v_unit_circle = np.stack(
+        [
+            np.sin(angles),  # x
+            np.cos(angles),  # y
+            np.zeros_like(angles),  # z
+        ],
+        axis=1,
+    )
 
     # Step 2 - rotate to be orth to vc
-    A = A_total(alpha_c, eps_c)   
+    A = A_total(alpha_c, eps_c)
     A_inv = A.T
-    
+
     v_unit_disp = (A @ v_unit_circle.T).T
     vc_norm = np.linalg.norm(vc)
-    one_vc  = vc / vc_norm
+    one_vc = vc / vc_norm
 
     # Step 3 - disp velocities Eq (12)
     v_disp = p.v_delta * v_unit_disp
@@ -203,66 +208,70 @@ def run_sim(p: Params):
     v_long = p.v_L * one_vc
     v_obj0 = vc[None, :] + v_disp + v_long[None, :]
 
-    grav_term = np.array([0., 0., -p.g]) * (dt**2) / 2.0
+    grav_term = np.array([0.0, 0.0, -p.g]) * (dt**2) / 2.0
     x_obj_true = xc[None, :] + v_obj0 * dt + grav_term[None, :]
 
     # Step 5 - carrier pos after Eqs (16, 43)
-    vce = (vc_norm - p.me_over_mc * p.v_L) / (1.0 - p.me_over_mc)   # Eq. 43
+    vce = (vc_norm - p.me_over_mc * p.v_L) / (1.0 - p.me_over_mc)  # Eq. 43
     v_car_after = vce * one_vc
-    x_car_true  = xc + v_car_after * dt + grav_term
+    x_car_true = xc + v_car_after * dt + grav_term
 
     # Step 6 - spherical measurements (Eq. 17)
-    u_obj_true = cart2sph_ENU(x_obj_true) 
-     noise = np.stack([
-        rng.normal(0., p.sigma_r,  size=n),
-        rng.normal(0., p.sigma_az, size=n),
-        rng.normal(0., p.sigma_el, size=n),
-    ], axis=1)
-    u_obj_noisy = u_obj_true + noise 
+    u_obj_true = cart2sph_ENU(x_obj_true)
+    noise = np.stack(
+        [
+            rng.normal(0.0, p.sigma_r, size=n),
+            rng.normal(0.0, p.sigma_az, size=n),
+            rng.normal(0.0, p.sigma_el, size=n),
+        ],
+        axis=1,
+    )
+    u_obj_noisy = u_obj_true + noise
 
     # Step 7 - Convert to cartesian Eq 22
-    z_obj_true  = sph2cart_ENU(u_obj_true)    # (n, 3)
-    z_obj_noisy = sph2cart_ENU(u_obj_noisy) 
+    z_obj_true = sph2cart_ENU(u_obj_true)  # (n, 3)
+    z_obj_noisy = sph2cart_ENU(u_obj_noisy)
 
     # Step 8 - center measurements Eq 24
-    z0_true  = z_obj_true.mean(axis=0)    # (3,)
-    z0_noisy = z_obj_noisy.mean(axis=0) 
+    z0_true = z_obj_true.mean(axis=0)  # (3,)
+    z0_noisy = z_obj_noisy.mean(axis=0)
 
     # Step 9 - rotate into circular shape Eq 25
-    y_true  = (A_inv @ (z_obj_true  - z0_true ).T).T   # (n, 3)
-    y_noisy = (A_inv @ (z_obj_noisy - z0_noisy).T).T   # (n, 3)
+    y_true = (A_inv @ (z_obj_true - z0_true).T).T  # (n, 3)
+    y_noisy = (A_inv @ (z_obj_noisy - z0_noisy).T).T  # (n, 3)
 
     # -----------------------------------------------------------------------
     # sigma_w  (position measurement MSE in Cartesian)
     # Use the mean true range/az/el for a representative estimate
     # -----------------------------------------------------------------------
-    r_mean  = float(u_obj_true[:, 0].mean())
+    r_mean = float(u_obj_true[:, 0].mean())
     az_mean = float(u_obj_true[:, 1].mean())
     el_mean = float(u_obj_true[:, 2].mean())
-    sigma_w_sq = cartesian_noise_MSE(r_mean, az_mean, el_mean,
-                                      p.sigma_r, p.sigma_az, p.sigma_el)
+    sigma_w_sq = cartesian_noise_MSE(
+        r_mean, az_mean, el_mean, p.sigma_r, p.sigma_az, p.sigma_el
+    )
     sigma_w = float(np.sqrt(sigma_w_sq))
 
     return {
-        "params":       asdict(p),
-        "dt":           dt,
-        "A":            A,
-        "A_inv":        A_inv,
-        "one_vc":       one_vc,
-        "vc_norm":      vc_norm,
-        "v_unit_disp":  v_unit_disp,
-        "x_obj_true":   x_obj_true,
-        "x_car_true":   x_car_true,
-        "u_obj_true":   u_obj_true,
-        "u_obj_noisy":  u_obj_noisy,
-        "z_obj_true":   z_obj_true,
-        "z_obj_noisy":  z_obj_noisy,
-        "z0_true":      z0_true,
-        "z0_noisy":     z0_noisy,
-        "y_true":       y_true,
-        "y_noisy":      y_noisy,
-        "vce":          vce,
-        "sigma_w":      sigma_w,
+        "params": asdict(p),
+        "dt": dt,
+        "A": A,
+        "A_inv": A_inv,
+        "one_vc": one_vc,
+        "vc_norm": vc_norm,
+        "v_unit_disp": v_unit_disp,
+        "x_obj_true": x_obj_true,
+        "x_car_true": x_car_true,
+        "u_obj_true": u_obj_true,
+        "u_obj_noisy": u_obj_noisy,
+        "z_obj_true": z_obj_true,
+        "z_obj_noisy": z_obj_noisy,
+        "z0_true": z0_true,
+        "z0_noisy": z0_noisy,
+        "y_true": y_true,
+        "y_noisy": y_noisy,
+        "vce": vce,
+        "sigma_w": sigma_w,
     }
 
 
@@ -270,17 +279,18 @@ def run_sim(p: Params):
 # Table 1 – theoretical standard deviations  (Eqs. 33, 41, 52, 57)
 # ---------------------------------------------------------------------------
 
+
 def compute_table1_sigmas(p: Params, sim: dict) -> dict:
-    dt      = sim["dt"]         # t_rho - t0
-    n       = p.n
+    dt = sim["dt"]  # t_rho - t0
+    n = p.n
     sigma_w = sim["sigma_w"]
 
     # From position
-    sigma_vdelta_pos = np.sqrt((2.0 * sigma_w**2 / n) / dt**2) # disp speed s.d.
+    sigma_vdelta_pos = np.sqrt((2.0 * sigma_w**2 / n) / dt**2)  # disp speed s.d.
 
     sigma_vL_pos = np.sqrt(
         (sigma_w**2 / n + p.sigma_p**2) / dt**2 + p.sigma_vc**2
-    ) # long. speed s.d.
+    )  # long. speed s.d.
     sigma_v2pt = np.sqrt(2.0 * sigma_w**2 / dt**2)
 
     # Doppler-based velocity uncertainties
@@ -288,89 +298,93 @@ def compute_table1_sigmas(p: Params, sim: dict) -> dict:
     # Line-of-sight unit vector (radar → carrier)
     xc = np.array(p.xc_m, dtype=float)
     one_LOS = xc / np.linalg.norm(xc)
-    
+
     # Projection of carrier velocity onto LOS
     one_vc = sim["one_vc"]
     phi_cLOS = float(one_vc @ one_LOS)
-    
+
     # Longitudinal speed uncertainty from Doppler
     sigma_vL_doppler = np.sqrt(p.sigma_D**2 / phi_cLOS**2 + p.sigma_vc**2)
-    
+
     # Dispersion unit velocity projections onto LOS
-    v_unit_disp = sim["v_unit_disp"]      # (n, 3)
-    phi_disp = v_unit_disp @ one_LOS      # (n,)
-    
+    v_unit_disp = sim["v_unit_disp"]  # (n, 3)
+    phi_disp = v_unit_disp @ one_LOS  # (n,)
+
     # Use one object from each opposite pair
     n_half = n // 2
     phi_half = phi_disp[:n_half]
-    
+
     # Dispersion speed uncertainty from Doppler
     sum_term = np.sum(2.0 * p.sigma_D**2 / phi_half**2)
     sigma_vdelta_doppler = np.sqrt(sum_term / n**2)
-    
+
     return {
-        "sigma_vdelta_pos":     sigma_vdelta_pos,
-        "sigma_vL_pos":         sigma_vL_pos,
+        "sigma_vdelta_pos": sigma_vdelta_pos,
+        "sigma_vL_pos": sigma_vL_pos,
         "sigma_vdelta_doppler": sigma_vdelta_doppler,
-        "sigma_vL_doppler":     sigma_vL_doppler,
-        "sigma_v2pt_baseline":  sigma_v2pt,
-        "phi_cLOS":             phi_cLOS,
+        "sigma_vL_doppler": sigma_vL_doppler,
+        "sigma_v2pt_baseline": sigma_v2pt,
+        "phi_cLOS": phi_cLOS,
     }
+
 
 # MLE estimates from noisy position measurements
 
+
 def compute_mle_estimates(p: Params, sim: dict) -> dict:
     """Estimate v_delta and v_L from noisy position data."""
-    dt      = sim["dt"]
-    n       = p.n
-    n_half  = n // 2
+    dt = sim["dt"]
+    n = p.n
+    n_half = n // 2
     y_noisy = sim["y_noisy"]
     z0_noisy = sim["z0_noisy"]
 
     # Opposite pairs on the circle
     diffs = y_noisy[:n_half] - y_noisy[n_half:]
-    d_i   = np.linalg.norm(diffs, axis=1)
+    d_i = np.linalg.norm(diffs, axis=1)
 
     # Dispersion speed estimate
     v_hat_delta = d_i.mean() / (2.0 * dt)
 
     # Longitudinal speed estimate
-    xc      = np.array(p.xc_m, dtype=float)
+    xc = np.array(p.xc_m, dtype=float)
     vc_norm = sim["vc_norm"]
 
     v_hat_L = np.linalg.norm(z0_noisy - xc) / dt - vc_norm
 
     return {
         "v_hat_delta": float(v_hat_delta),
-        "v_hat_L":     float(v_hat_L),
-        "d_i":         d_i,
+        "v_hat_L": float(v_hat_L),
+        "d_i": d_i,
     }
 
 
 # R2 – true ranges
 
+
 def compute_R2(p: Params, sim: dict) -> dict:
     u_obj_true = sim["u_obj_true"]
-    z0_true    = sim["z0_true"]
+    z0_true = sim["z0_true"]
     x_car_true = sim["x_car_true"]
 
-    ranges_obj   = u_obj_true[:, 0]
+    ranges_obj = u_obj_true[:, 0]
     range_centre = np.linalg.norm(z0_true)
     range_carrier = np.linalg.norm(x_car_true)
 
     return {
-        "ranges_obj":    ranges_obj,
-        "range_centre":  range_centre,
+        "ranges_obj": ranges_obj,
+        "range_centre": range_centre,
         "range_carrier": range_carrier,
-        "vce":           sim["vce"],
+        "vce": sim["vce"],
     }
 
 
 # Plots
 
+
 def plot_R1(outdir: Path, sim: dict) -> None:
     """2D az/el plot of true and noisy object positions."""
-    u_obj_true  = sim["u_obj_true"]
+    u_obj_true = sim["u_obj_true"]
     u_obj_noisy = sim["u_obj_noisy"]
 
     az_true = u_obj_true[:, 1] * 1e3
@@ -379,39 +393,64 @@ def plot_R1(outdir: Path, sim: dict) -> None:
     az_noisy = u_obj_noisy[:, 1] * 1e3
     el_noisy = u_obj_noisy[:, 2] * 1e3
 
-    z0_true   = sim["z0_true"]
+    z0_true = sim["z0_true"]
     u_z0_true = cart2sph_ENU(z0_true)
-    az_ctr    = u_z0_true[1] * 1e3
-    el_ctr    = u_z0_true[2] * 1e3
+    az_ctr = u_z0_true[1] * 1e3
+    el_ctr = u_z0_true[2] * 1e3
 
     fig, ax = plt.subplots(figsize=(7, 6))
 
     # Connect true → noisy
     for i in range(len(az_true)):
-        ax.plot([az_true[i], az_noisy[i]],
-                [el_true[i], el_noisy[i]],
-                color='gray', linewidth=0.7, alpha=0.6, zorder=1)
+        ax.plot(
+            [az_true[i], az_noisy[i]],
+            [el_true[i], el_noisy[i]],
+            color="gray",
+            linewidth=0.7,
+            alpha=0.6,
+            zorder=1,
+        )
 
-    ax.scatter(az_true, el_true,
-               marker='o', color='steelblue', s=50,
-               label='True positions', zorder=3)
+    ax.scatter(
+        az_true,
+        el_true,
+        marker="o",
+        color="steelblue",
+        s=50,
+        label="True positions",
+        zorder=3,
+    )
 
-    ax.scatter(az_noisy, el_noisy,
-               marker='+', color='tomato', s=80,
-               label='Noisy positions', zorder=3)
+    ax.scatter(
+        az_noisy,
+        el_noisy,
+        marker="+",
+        color="tomato",
+        s=80,
+        label="Noisy positions",
+        zorder=3,
+    )
 
-    ax.scatter(az_ctr, el_ctr,
-               marker='*', s=150, color='green',
-               label='Centre (true)', zorder=4)
+    ax.scatter(
+        az_ctr,
+        el_ctr,
+        marker="*",
+        s=150,
+        color="green",
+        label="Centre (true)",
+        zorder=4,
+    )
 
     # Label true points
     for i in range(len(az_true)):
-        ax.annotate(str(i+1),
-                    (az_true[i], el_true[i]),
-                    textcoords="offset points",
-                    xytext=(4, 4),
-                    fontsize=7,
-                    color='steelblue')
+        ax.annotate(
+            str(i + 1),
+            (az_true[i], el_true[i]),
+            textcoords="offset points",
+            xytext=(4, 4),
+            fontsize=7,
+            color="steelblue",
+        )
 
     all_az = np.concatenate([az_true, az_noisy, [az_ctr]])
     all_el = np.concatenate([el_true, el_noisy, [el_ctr]])
@@ -424,10 +463,12 @@ def plot_R1(outdir: Path, sim: dict) -> None:
 
     ax.set_xlabel("Azimuth (mrad)")
     ax.set_ylabel("Elevation (mrad)")
-    ax.set_title("R1 – Ejected objects at $t_\\rho = 1\\,$s\n"
-                 "(true = circles, noisy = crosses)")
+    ax.set_title(
+        "R1 – Ejected objects at $t_\\rho = 1\\,$s\n"
+        "(true = circles, noisy = crosses)"
+    )
     ax.legend(fontsize=9)
-    ax.grid(True, linestyle='--', alpha=0.5)
+    ax.grid(True, linestyle="--", alpha=0.5)
 
     plt.tight_layout()
     plt.savefig(outdir / "R1.png", dpi=200)
@@ -443,28 +484,30 @@ def plot_R3(outdir: Path, sim: dict) -> None:
     x_car_km = x_car / 1e3
 
     fig = plt.figure(figsize=(8, 7))
-    ax  = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
 
-    ax.scatter(x_obj_km[:, 0],
-               x_obj_km[:, 1],
-               x_obj_km[:, 2],
-               s=60, marker='o',
-               color='steelblue',
-               label='Ejected objects')
+    ax.scatter(
+        x_obj_km[:, 0],
+        x_obj_km[:, 1],
+        x_obj_km[:, 2],
+        s=60,
+        marker="o",
+        color="steelblue",
+        label="Ejected objects",
+    )
 
-    ax.scatter([x_car_km[0]],
-               [x_car_km[1]],
-               [x_car_km[2]],
-               s=120, marker='X',
-               color='tomato',
-               label='Carrier')
+    ax.scatter(
+        [x_car_km[0]],
+        [x_car_km[1]],
+        [x_car_km[2]],
+        s=120,
+        marker="X",
+        color="tomato",
+        label="Carrier",
+    )
 
     for i in range(len(x_obj_km)):
-        ax.text(x_obj_km[i, 0],
-                x_obj_km[i, 1],
-                x_obj_km[i, 2],
-                f' {i+1}',
-                fontsize=7)
+        ax.text(x_obj_km[i, 0], x_obj_km[i, 1], x_obj_km[i, 2], f" {i+1}", fontsize=7)
 
     ax.set_xlabel("East (km)")
     ax.set_ylabel("North (km)")
@@ -478,6 +521,7 @@ def plot_R3(outdir: Path, sim: dict) -> None:
 
 
 # Printing results
+
 
 def print_R2(p: Params, r2: dict) -> str:
     lines = []
@@ -504,32 +548,42 @@ def print_table1(p: Params, sigmas: dict, mle: dict) -> str:
     lines.append(f"{'Method':<35} {'Disp. speed':>14} {'Long. speed':>14}")
     lines.append("-" * 65)
 
-    lines.append(f"{'From position measurements':<35} "
-                 f"{sigmas['sigma_vdelta_pos']:>14.4f} "
-                 f"{sigmas['sigma_vL_pos']:>14.4f}")
+    lines.append(
+        f"{'From position measurements':<35} "
+        f"{sigmas['sigma_vdelta_pos']:>14.4f} "
+        f"{sigmas['sigma_vL_pos']:>14.4f}"
+    )
 
-    lines.append(f"{'From Doppler measurements':<35} "
-                 f"{sigmas['sigma_vdelta_doppler']:>14.4f} "
-                 f"{sigmas['sigma_vL_doppler']:>14.4f}")
+    lines.append(
+        f"{'From Doppler measurements':<35} "
+        f"{sigmas['sigma_vdelta_doppler']:>14.4f} "
+        f"{sigmas['sigma_vL_doppler']:>14.4f}"
+    )
 
     lines.append("-" * 65)
 
-    lines.append(f"{'Baseline 2-pt differencing':<35} "
-                 f"{sigmas['sigma_v2pt_baseline']:>14.4f} "
-                 f"{sigmas['sigma_v2pt_baseline']:>14.4f}")
+    lines.append(
+        f"{'Baseline 2-pt differencing':<35} "
+        f"{sigmas['sigma_v2pt_baseline']:>14.4f} "
+        f"{sigmas['sigma_v2pt_baseline']:>14.4f}"
+    )
 
     lines.append("")
     lines.append(f"  phi_cLOS: {sigmas['phi_cLOS']:.6f}")
     lines.append("")
     lines.append("MLE estimates (from noisy positions):")
 
-    lines.append(f"  True v_delta = {p.v_delta:.2f} m/s  |  "
-                 f"v_hat_delta = {mle['v_hat_delta']:.4f} m/s  |  "
-                 f"error = {mle['v_hat_delta'] - p.v_delta:+.4f} m/s")
+    lines.append(
+        f"  True v_delta = {p.v_delta:.2f} m/s  |  "
+        f"v_hat_delta = {mle['v_hat_delta']:.4f} m/s  |  "
+        f"error = {mle['v_hat_delta'] - p.v_delta:+.4f} m/s"
+    )
 
-    lines.append(f"  True v_L     = {p.v_L:.2f} m/s  |  "
-                 f"v_hat_L     = {mle['v_hat_L']:.4f} m/s  |  "
-                 f"error = {mle['v_hat_L'] - p.v_L:+.4f} m/s")
+    lines.append(
+        f"  True v_L     = {p.v_L:.2f} m/s  |  "
+        f"v_hat_L     = {mle['v_hat_L']:.4f} m/s  |  "
+        f"error = {mle['v_hat_L'] - p.v_L:+.4f} m/s"
+    )
 
     lines.append("")
     return "\n".join(lines)
@@ -537,9 +591,9 @@ def print_table1(p: Params, sigmas: dict, mle: dict) -> str:
 
 # Main entry point
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="Carrier deployment simulation")
+    parser = argparse.ArgumentParser(description="Carrier deployment simulation")
 
     parser.add_argument("--outdir", default="outputs")
     parser.add_argument("--seed", type=int, default=0)
@@ -551,14 +605,15 @@ def main():
 
     p = Params(seed=args.seed)
 
-    sim    = run_sim(p)
+    sim = run_sim(p)
     sigmas = compute_table1_sigmas(p, sim)
-    mle    = compute_mle_estimates(p, sim)
-    r2     = compute_R2(p, sim)
+    mle = compute_mle_estimates(p, sim)
+    r2 = compute_R2(p, sim)
 
-    np.savez(str(outdir / "arrays.npz"),
-             **{k: v for k, v in sim.items()
-                if isinstance(v, np.ndarray)})
+    np.savez(
+        str(outdir / "arrays.npz"),
+        **{k: v for k, v in sim.items() if isinstance(v, np.ndarray)},
+    )
 
     plot_R1(outdir, sim)
     plot_R3(outdir, sim)
