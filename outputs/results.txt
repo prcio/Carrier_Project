@@ -1,5 +1,5 @@
 ============================================================
-R2 – True ranges at t_rho = 1 s
+R2 – True ranges of ejected objects at t_rho = 1 s
 ============================================================
   Object  1:  range =  65.5957 km
   Object  2:  range =  65.6003 km
@@ -13,22 +13,37 @@ R2 – True ranges at t_rho = 1 s
   Object 10:  range =  65.5792 km
   Object 11:  range =  65.5835 km
   Object 12:  range =  65.5895 km
-  Centre:   range =  65.5901 km
-  Carrier:  range =  65.3803 km
-  vce: 4851.4916 m/s
+  Centre:     range =  65.5901 km
+  Carrier:    range =  65.3803 km
+  vce (carrier speed after ejection): 4851.4916 m/s
 
-============================================================
+========================================================================
 Table 1 – Speed estimate standard deviations (m/s)
-============================================================
-Method                                 Disp. speed    Long. speed
------------------------------------------------------------------
-From position measurements                  5.5980         8.1036
-From Doppler measurements                   4.1951         5.1480
------------------------------------------------------------------
-Baseline 2-pt differencing                 19.3920        19.3920
+========================================================================
+Method                                  v_delta theo   v_delta emp      v_L theo       v_L emp
+------------------------------------------------------------------------
+Position meas. (Eq 33,41)                     5.5980        2.2600        8.1036        1.8809
+Doppler meas. (Eq 57,52)                      4.1951           N/A        5.1480           N/A
+------------------------------------------------------------------------
+Baseline 2-pt diff. (Eq 34)                  19.3920           N/A       19.3920           N/A
 
-  phi_cLOS: -0.816072
+  MC trials = 1000   |   mean v_delta = 21.5193 m/s  (true = 20.00)   |   mean v_L = 203.3004 m/s  (true = 200.00)
 
-MLE estimates (from noisy positions):
-  True v_delta = 20.00 m/s  |  v_hat_delta = 21.4433 m/s  |  error = +1.4433 m/s
-  True v_L     = 200.00 m/s  |  v_hat_L     = 204.6437 m/s  |  error = +4.6437 m/s
+  phi_cLOS = -0.816072
+
+------------------------------------------------------------------------
+Single-run MLE (seed=0):
+  v_delta: true=20.00  est=21.4433  err=+1.4433 m/s
+  v_L:     true=200.00  est=204.6437  err=+4.6437 m/s
+
+=================================================================
+Monte Carlo validation  (N = 1000 trials)
+=================================================================
+                                            v_delta          v_L
+-----------------------------------------------------------------
+True value (m/s)                            20.0000     200.0000
+MC mean (m/s)                               21.5193     203.3004
+-----------------------------------------------------------------
+Empirical std (m/s)                          2.2600       1.8809
+Theoretical std — pos. (m/s)                 5.5980       8.1036
+-----------------------------------------------------------------
