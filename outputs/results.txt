@@ -22,22 +22,22 @@ Table 1 – Speed estimate standard deviations (m/s)
 ================================================================================
 Method                                  v_delta theo   v_delta emp      v_L theo       v_L emp
 --------------------------------------------------------------------------------
-Position meas. (Eq 33,41)                     3.9584        2.2600        8.1036        4.4087
-Doppler meas. (Eq 57,52)                      3.9632        4.0228        5.1480        3.1694
+Position meas. (Eq 33,41)                     3.9584        2.2600        8.1036        6.1792
+Doppler meas. (Eq 57,52)                      3.9632        4.0006        5.1480        5.2051
 --------------------------------------------------------------------------------
 Baseline 2-pt diff. (Eq 34)                  19.3920           N/A       19.3920           N/A
 
-  MC trials = 1000   |   mean v_delta = 21.5193 m/s  (true = 20.00)   |   mean v_L = 203.3784 m/s  (true = 200.00)
-  Doppler MC: mean v_delta_D = 21.1439 m/s   |   mean v_L_D = 199.9654 m/s
+  MC trials = 1000   |   mean v_delta = 21.5193 m/s  (true = 20.00)   |   mean v_L = 203.3921 m/s  (true = 200.00)
+  Doppler MC: mean v_delta_D = 20.9100 m/s   |   mean v_L_D = 199.9571 m/s
 
   phi_cLOS = -0.816072
 
 --------------------------------------------------------------------------------
 Single-run MLE (seed=0):
   [Position] v_delta: true=20.00  est=21.4433  err=+1.4433 m/s
-  [Position] v_L:     true=200.00  est=210.9506  err=+10.9506 m/s
-  [Doppler]  v_delta: true=20.00  est=24.9135  err=+4.9135 m/s
-  [Doppler]  v_L:     true=200.00  est=207.7114  err=+7.7114 m/s
+  [Position] v_L:     true=200.00  est=197.3507  err=-2.6493 m/s
+  [Doppler]  v_delta: true=20.00  est=22.4619  err=+2.4619 m/s
+  [Doppler]  v_L:     true=200.00  est=192.5383  err=-7.4617 m/s
 
 CORRECTIONS APPLIED:
   Fix 1: Eq.(33) sigma_vdelta_pos = sigma_w / (sqrt(n) * dt)  [was sqrt(2)*sigma_w/(sqrt(n)*dt)]
@@ -52,12 +52,12 @@ Monte Carlo validation  (N = 1000 trials)
 True value (m/s)                            20.0000     200.0000
 
   --- Position-based ---
-MC mean (m/s)                               21.5193     203.3784
-Empirical std (m/s)                          2.2600       4.4087
+MC mean (m/s)                               21.5193     203.3921
+Empirical std (m/s)                          2.2600       6.1792
 Theoretical std (m/s)                        3.9584       8.1036
 
   --- Doppler-based ---
-MC mean (m/s)                               21.1439     199.9654
-Empirical std (m/s)                          4.0228       3.1694
+MC mean (m/s)                               20.9100     199.9571
+Empirical std (m/s)                          4.0006       5.2051
 Theoretical std (m/s)                        3.9632       5.1480
 ---------------------------------------------------------------------------

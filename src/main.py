@@ -204,8 +204,9 @@ def run_sim(p: Params) -> dict:
 
     # Noisy carrier estimates (Fix 2)
     xc_hat = xc + rng.normal(0.0, p.sigma_p / np.sqrt(3), size=3)
-    vc_hat_vec = vc + rng.normal(0.0, p.sigma_vc / np.sqrt(3), size=3)
-    vc_hat_norm = np.linalg.norm(vc_hat_vec)
+    vc_hat_norm = np.linalg.norm(vc) + rng.normal(0.0, p.sigma_vc)
+    #vc_hat_vec = vc + rng.normal(0.0, p.sigma_vc / np.sqrt(3), size=3)
+    #vc_hat_norm = np.linalg.norm(vc_hat_vec)
 
     # LOS geometry
     one_LOS_carrier = xc / np.linalg.norm(xc)
