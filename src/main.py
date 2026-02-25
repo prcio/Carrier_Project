@@ -13,6 +13,10 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 
+# ---------------------------------------------------------------------------
+# Coordinate transforms
+# ---------------------------------------------------------------------------
+
 def cart2sph_ENU(xyz: np.ndarray) -> np.ndarray:
     x = xyz[..., 0]
     y = xyz[..., 1]
@@ -21,30 +25,28 @@ def cart2sph_ENU(xyz: np.ndarray) -> np.ndarray:
     r = np.sqrt(x * x + y * y + z * z)
     rho = np.sqrt(x * x + y * y)
 
-    az = np.arctan2(x, y)  # clockwise from North  (East is positive)
-    el = np.arctan2(z, rho)  # above horizontal
+    az = np.arctan2(x, y)  # clockwise from North (ENU)
+    el = np.arctan2(z, rho)
 
     return np.stack([r, az, el], axis=-1)
 
 
 def sph2cart_ENU(rae: np.ndarray) -> np.ndarray:
-    """(range, azimuth, elevation) -> Cartesian ENU."""
     r = rae[..., 0]
     az = rae[..., 1]
     el = rae[..., 2]
 
     rho = r * np.cos(el)
     z = r * np.sin(el)
-    x = rho * np.sin(az)  # East
-    y = rho * np.cos(az)  # North
+    x = rho * np.sin(az)
+    y = rho * np.cos(az)
 
     return np.stack([x, y, z], axis=-1)
 
 
 # ---------------------------------------------------------------------------
-# Rotation matrices  –  Eq. (7), (8), (10)
+# Rotation matrices  (Eqs. 7–10)
 # ---------------------------------------------------------------------------
-
 
 def A1(alpha_c: float) -> np.ndarray:
     ca, sa = np.cos(alpha_c), np.sin(alpha_c)
@@ -57,11 +59,11 @@ def A2(eps_c: float) -> np.ndarray:
 
 
 def A_total(alpha_c: float, eps_c: float) -> np.ndarray:
+    # Eq. (10)
     ca, sa = np.cos(alpha_c), np.sin(alpha_c)
     ce, se = np.cos(eps_c), np.sin(eps_c)
 
-    # Eq. (10)
-    A = np.array(
+    return np.array(
         [
             [ca, sa * se, sa * ce],
             [-sa, ca * se, ca * ce],
@@ -69,30 +71,21 @@ def A_total(alpha_c: float, eps_c: float) -> np.ndarray:
         ],
         dtype=float,
     )
-    return A
 
 
 # ---------------------------------------------------------------------------
-# Measurement noise covariance in Cartesian  (for sigma_w)
+# Cartesian noise MSE via linearised Jacobian
 # ---------------------------------------------------------------------------
-
 
 def cartesian_noise_MSE(
     r: float, az: float, el: float, sigma_r: float, sigma_az: float, sigma_el: float
 ) -> float:
-    """
-    Linearised Cartesian position noise MSE  sigma_w^2 = tr(R_xyz).
-    Jacobian of  sph2cart  at (r, az, el).
-    """
     cos_el = np.cos(el)
     sin_el = np.sin(el)
     cos_az = np.cos(az)
     sin_az = np.sin(az)
 
-    # Jacobian  d(x,y,z)/d(r, az, el)
-    # x = r cos_el sin_az
-    # y = r cos_el cos_az
-    # z = r sin_el
+    # Jacobian of sph2cart at (r, az, el)
     J = np.array(
         [
             [cos_el * sin_az, r * cos_el * cos_az, -r * sin_el * sin_az],
@@ -110,32 +103,31 @@ def cartesian_noise_MSE(
 # Simulation parameters  (Section 5)
 # ---------------------------------------------------------------------------
 
-
 @dataclass(frozen=True)
 class Params:
     n: int = 12
     t0: float = 0.0
-    t_rho: float = 1.0  # resolution time
+    t_rho: float = 1.0
     g: float = 9.81
 
-    v_delta: float = 20.0  # lateral ejection speed  [m/s]
-    v_L: float = 200.0  # longitudinal ejection speed  [m/s]
+    v_delta: float = 20.0  # lateral speed
+    v_L: float = 200.0     # longitudinal speed
 
-    xc_m: tuple = (40e3, 40e3, 40e3)  # carrier position at ejection  [m]
-    vc_mps: tuple = (-3.2e3, 0.0, -3.0e3)  # carrier velocity  [m/s]
+    xc_m: tuple = (40e3, 40e3, 40e3)
+    vc_mps: tuple = (-3.2e3, 0.0, -3.0e3)
 
     alpha_c_deg: float = -90.0
     eps_c_deg: float = -43.0
 
-    # Radar measurement noise
-    sigma_r: float = 5.0  # range  [m]
-    sigma_az: float = 0.15e-3  # azimuth  [rad]
-    sigma_el: float = 0.15e-3  # elevation  [rad]
-    sigma_D: float = 1.0  # Doppler  [m/s]
+    # Measurement noise
+    sigma_r: float = 5.0
+    sigma_az: float = 0.15e-3
+    sigma_el: float = 0.15e-3
+    sigma_D: float = 1.0
 
-    # Track errors for carrier
-    sigma_p: float = 5.0  # carrier position RMSE  [m]
-    sigma_vc: float = 5.0  # carrier velocity RMSE  [m/s]
+    # Carrier track errors (Eqs. 40–41, 51–52)
+    sigma_p: float = 5.0
+    sigma_vc: float = 5.0
 
     me_over_mc: float = 0.1
     seed: int = 0
@@ -144,7 +136,6 @@ class Params:
 # ---------------------------------------------------------------------------
 # Core simulation
 # ---------------------------------------------------------------------------
-
 
 def run_sim(p: Params) -> dict:
     rng = np.random.default_rng(p.seed)
@@ -158,45 +149,37 @@ def run_sim(p: Params) -> dict:
     alpha_c = np.deg2rad(p.alpha_c_deg)
     eps_c = np.deg2rad(p.eps_c_deg)
 
-    # Unit circle
+    # Unit circle of dispersion directions
     angles = 2.0 * np.pi * np.arange(1, n + 1) / n
     v_unit_circle = np.stack(
-        [
-            np.sin(angles),
-            np.cos(angles),
-            np.zeros_like(angles),
-        ],
-        axis=1,
+        [np.sin(angles), np.cos(angles), np.zeros_like(angles)], axis=1
     )
 
-    # 2 - rotate to be orth. to v_c (Eq. 4, 6)
+    # Rotate into plane orthogonal to carrier velocity (Eq. 12)
     A = A_total(alpha_c, eps_c)
     A_inv = A.T
-
     v_unit_disp = (A @ v_unit_circle.T).T
 
     vc_norm = np.linalg.norm(vc)
     one_vc = vc / vc_norm
 
-    # 3 - disp velocities (Eq. 12)
     v_disp = p.v_delta * v_unit_disp
-
-    # 4 - initial obj velocities & positions (Eq. 13, 14, 15)
     v_long = p.v_L * one_vc
-    v_obj0 = vc[None, :] + v_disp + v_long[None, :]
 
+    # Object velocities and positions (Eqs. 13–16)
+    v_obj0 = vc[None, :] + v_disp + v_long[None, :]
     grav_term = np.array([0.0, 0.0, -p.g]) * (dt**2) / 2.0
     x_obj_true = xc[None, :] + v_obj0 * dt + grav_term[None, :]
 
-    # 5 - carrier position after election (Eq. 16, 43)
-    vce = (vc_norm - p.me_over_mc * p.v_L) / (1.0 - p.me_over_mc)  # Eq. 43
+    # Carrier after ejection (Eq. 43)
+    vce = (vc_norm - p.me_over_mc * p.v_L) / (1.0 - p.me_over_mc)
     v_car_after = vce * one_vc
     x_car_true = xc + v_car_after * dt + grav_term
 
-    # 6A - noiseless spherical measurements Eq. 17
+    # Spherical measurements (Eq. 17)
     u_obj_true = cart2sph_ENU(x_obj_true)
 
-    # 6B - adding position noise
+    # Add measurement noise
     noise = np.stack(
         [
             rng.normal(0.0, p.sigma_r, size=n),
@@ -207,59 +190,51 @@ def run_sim(p: Params) -> dict:
     )
     u_obj_noisy = u_obj_true + noise
 
-    # 7 - convert to cartesian (Eq. 22)
+    # Back to Cartesian (Eq. 22)
     z_obj_true = sph2cart_ENU(u_obj_true)
     z_obj_noisy = sph2cart_ENU(u_obj_noisy)
 
-    # 8 - center of object measurements (Eq. 24)
+    # Object centroid (Eq. 24)
     z0_true = z_obj_true.mean(axis=0)
     z0_noisy = z_obj_noisy.mean(axis=0)
 
-    # 9 - rotate into circular shape (Eq. 25)
+    # Rotate into circular frame (Eq. 25)
     y_true = (A_inv @ (z_obj_true - z0_true).T).T
     y_noisy = (A_inv @ (z_obj_noisy - z0_noisy).T).T
 
-    # -----------------------------------------------------------------------
-    # Doppler measurements  (Section 4.3 and 4.4)
-    # -----------------------------------------------------------------------
-    # LOS unit vector from radar (origin) to carrier at ejection time
-    one_LOS = xc / np.linalg.norm(xc)  # Eq. 44
+    # Noisy carrier estimates (Fix 2)
+    xc_hat = xc + rng.normal(0.0, p.sigma_p / np.sqrt(3), size=3)
+    vc_hat_vec = vc + rng.normal(0.0, p.sigma_vc / np.sqrt(3), size=3)
+    vc_hat_norm = np.linalg.norm(vc_hat_vec)
 
-    # Projection factors for each object's dispersion velocity unit vector (Eq. 53)
-    phi_disp = v_unit_disp @ one_LOS  # shape (n,)
+    # LOS geometry
+    one_LOS_carrier = xc / np.linalg.norm(xc)
+    one_LOS_obj = x_obj_true / np.linalg.norm(x_obj_true, axis=1, keepdims=True)
 
-    # Projection of carrier velocity unit vector on LOS (Eq. 46)
-    phi_cLOS = float(one_vc @ one_LOS)
+    phi_disp = np.sum(v_unit_disp * one_LOS_obj, axis=1)  # Eq. 53
+    phi_cLOS = float(one_vc @ one_LOS_carrier)
 
-    # True Doppler of each ejected object just after ejection (Eq. 49 extended to all objects):
-    #   z_Di = (v_c + v_L)*phi_cLOS + v_delta*phi_disp_i  (carrier long. + obj dispersion)
-    # But we model at t_rho using object velocities v_obj0 projected on LOS:
-    z_D_true = v_obj0 @ one_LOS  # shape (n,)  — true radial velocity of each object
+    # Doppler measurements (Secs. 4.3–4.4)
+    z_D_true = np.sum(v_obj0 * one_LOS_obj, axis=1)
+    z_D_unresolved_true = float(np.mean(v_obj0 @ one_LOS_carrier))
 
-    # Add Doppler noise (Eq. 50)
-    doppler_noise = rng.normal(0.0, p.sigma_D, size=n)
-    z_D_noisy = z_D_true + doppler_noise
+    z_D_noisy = z_D_true + rng.normal(0.0, p.sigma_D, size=n)
+    z_D_unresolved_noisy = z_D_unresolved_true + rng.normal(0.0, p.sigma_D)
 
-    # Carrier Doppler just BEFORE ejection (Eq. 45): z_Dc(t0-) = vc * phi_cLOS
-    z_Dc_before_true = vc_norm * phi_cLOS
-    z_Dc_before_noisy = z_Dc_before_true + rng.normal(0.0, p.sigma_D)
+    z_Dc_before_noisy = vc_norm * phi_cLOS + rng.normal(0.0, p.sigma_D)
+    z_Dc_after_noisy = vce * phi_cLOS + rng.normal(0.0, p.sigma_D)
 
-    # Carrier Doppler just AFTER ejection (Eq. 48): z_Dc(t0+) = vce * phi_cLOS
-    z_Dc_after_true = vce * phi_cLOS
-    z_Dc_after_noisy = z_Dc_after_true + rng.normal(0.0, p.sigma_D)
-
-    # -----------------------------------------------------------------------
-    # sigma_w  (position measurement MSE in Cartesian)
-    # Use the mean true range/az/el for a representative estimate
-    # -----------------------------------------------------------------------
-
+    # Representative Cartesian noise level sigma_w
     r_mean = float(u_obj_true[:, 0].mean())
     az_mean = float(u_obj_true[:, 1].mean())
     el_mean = float(u_obj_true[:, 2].mean())
-    sigma_w_sq = cartesian_noise_MSE(
-        r_mean, az_mean, el_mean, p.sigma_r, p.sigma_az, p.sigma_el
+    sigma_w = float(
+        np.sqrt(
+            cartesian_noise_MSE(
+                r_mean, az_mean, el_mean, p.sigma_r, p.sigma_az, p.sigma_el
+            )
+        )
     )
-    sigma_w = float(np.sqrt(sigma_w_sq))
 
     return {
         "params": asdict(p),
@@ -267,7 +242,8 @@ def run_sim(p: Params) -> dict:
         "A": A,
         "A_inv": A_inv,
         "one_vc": one_vc,
-        "one_LOS": one_LOS,
+        "one_LOS_carrier": one_LOS_carrier,
+        "one_LOS_obj": one_LOS_obj,
         "phi_cLOS": phi_cLOS,
         "phi_disp": phi_disp,
         "vc_norm": vc_norm,
@@ -277,25 +253,22 @@ def run_sim(p: Params) -> dict:
         "x_car_true": x_car_true,
         "u_obj_true": u_obj_true,
         "u_obj_noisy": u_obj_noisy,
-        # Cartesian position measurements
         "z_obj_true": z_obj_true,
         "z_obj_noisy": z_obj_noisy,
-        # centres
         "z0_true": z0_true,
         "z0_noisy": z0_noisy,
-        # rotated/centred
         "y_true": y_true,
         "y_noisy": y_noisy,
-        # Doppler measurements
         "z_D_true": z_D_true,
         "z_D_noisy": z_D_noisy,
+        "z_D_unresolved_noisy": z_D_unresolved_noisy,
         "z_Dc_before_noisy": z_Dc_before_noisy,
         "z_Dc_after_noisy": z_Dc_after_noisy,
-        # derived scalars
+        "xc_hat": xc_hat,
+        "vc_hat_norm": vc_hat_norm,
         "vce": vce,
         "sigma_w": sigma_w,
     }
-
 
 # ---------------------------------------------------------------------------
 # Table 1 – theoretical standard deviations  (Eqs. 33, 41, 52, 57)
@@ -309,14 +282,15 @@ def compute_table1_sigmas(p: Params, sim: dict) -> dict:
 
     # From position measurements
 
-    # Dispersion speed s.d. (Eq. 33)
-    sigma_vdelta_pos = np.sqrt((2.0 * sigma_w**2 / n) / dt)
+    # FIX 1: Dispersion speed s.d. corrected formula (Eq. 33)
+    # Correct: sigma_w^2 / (n * dt^2)   [was: 2*sigma_w^2/n / dt^2]
+    sigma_vdelta_pos = np.sqrt(sigma_w**2 / (n * dt**2))
 
     # Longitudinal speed s.d. (Eq. 41)
     sigma_vL_pos = np.sqrt((sigma_w**2 / n + p.sigma_p**2) / dt**2 + p.sigma_vc**2)
 
     # Two-point differencing baseline
-    sigma_v2pt = np.sqrt(2.0 * sigma_w**2 / dt)
+    sigma_v2pt = np.sqrt(2.0 * sigma_w**2 / dt**2)
 
     # ------------------------------------------------------------------
     # From Doppler measurements
@@ -327,14 +301,10 @@ def compute_table1_sigmas(p: Params, sim: dict) -> dict:
     # Long speed from Doppler (Eq. 52)
     sigma_vL_doppler = np.sqrt(p.sigma_D**2 / phi_cLOS**2 + p.sigma_vc**2)
 
-    # v_delta from Doppler (Eq. 57)
-    v_unit_disp = sim["v_unit_disp"]
-    one_LOS = sim["one_LOS"]
-    phi_disp = v_unit_disp @ one_LOS  # Eq. 53
-
-    # Only n/2 objects (opposite pairs cancel longitudinal velocity)
+    # v_delta from Doppler (Eq. 57) — using per-target phi_disp (Fix 3)
+    phi_disp = sim["phi_disp"]  # already per-target (Fix 3)
     n_h = n // 2
-    phi_half = phi_disp[:n_h]  # Eq. 55
+    phi_half = phi_disp[:n_h]
 
     # Eq. 57
     sum_term = np.sum(2.0 * p.sigma_D**2 / phi_half**2)
@@ -352,14 +322,14 @@ def compute_table1_sigmas(p: Params, sim: dict) -> dict:
 
 def compute_mle_estimates(p: Params, sim: dict) -> dict:
     """
-    Estimate v_delta and v_L using position-based ML estimators, sec. 4.1 and 4.2
+    Estimate v_delta and v_L using position-based ML estimators, sec. 4.1 and 4.2.
+    Uses noisy carrier position/velocity estimates (Fix 2).
     """
 
     dt = sim["dt"]
     n = p.n
     n_half = n // 2
     y_noisy = sim["y_noisy"]
-    z0_noisy = sim["z0_noisy"]  # measurement center
 
     # Eq. 32: objects are on opposite sides of circle
     diffs = y_noisy[:n_half] - y_noisy[n_half:]
@@ -367,11 +337,12 @@ def compute_mle_estimates(p: Params, sim: dict) -> dict:
 
     v_hat_delta = d_i.sum() / (n / 2) / (2.0 * dt)
 
-    # v_L MLE Eq. 40
-    xc = np.array(p.xc_m, dtype=float)
-    vc_norm = sim["vc_norm"]
+    # v_L MLE Eq. 40 — use noisy carrier position/speed estimates (Fix 2)
+    xc_hat = sim["xc_hat"]
+    vc_hat_norm = sim["vc_hat_norm"]
+    z0_noisy = sim["z0_noisy"]
 
-    v_hat_L = np.linalg.norm(z0_noisy - xc) / dt - vc_norm  # Eq. 40
+    v_hat_L = np.linalg.norm(z0_noisy - xc_hat) / dt - vc_hat_norm  # Eq. 40
 
     return {
         "v_hat_delta": float(v_hat_delta),
@@ -383,36 +354,25 @@ def compute_mle_estimates(p: Params, sim: dict) -> dict:
 def compute_doppler_mle_estimates(p: Params, sim: dict) -> dict:
     """
     Estimate v_delta and v_L using Doppler-based ML estimators, sec. 4.3 and 4.4.
-
-    v_L  from Eq. (51): v_hat_LD = z_D(t0+) / phi_cLOS - v_hat_c
-    v_delta from Eq. (56): fusion of opposite-pair Doppler differences
+    Uses noisy carrier velocity estimate (Fix 2) and per-target LOS phi_disp (Fix 3).
     """
     n = p.n
     n_half = n // 2
 
     phi_cLOS = sim["phi_cLOS"]
-    phi_disp = sim["phi_disp"]  # shape (n,)
-    z_D_noisy = sim["z_D_noisy"]  # shape (n,)
-    vc_norm = sim["vc_norm"]
+    phi_disp = sim["phi_disp"]  # per-target phi values (Fix 3)
+    z_D_noisy = sim["z_D_noisy"]
+    vc_hat_norm = sim["vc_hat_norm"]   # noisy carrier speed estimate (Fix 2)
 
     # --- v_L from Doppler (Eq. 51) ---
-    # Use the mean Doppler across all n objects as the "unresolved" measurement
-    # approximation for z_D(t0+): at t0+ objects are still unresolved, yielding
-    # a composite Doppler dominated by the longitudinal component.
-    # More precisely: z_D(t0+) = (v_c + v_L)*phi_cLOS + noise  (Eq. 49)
-    # so: v_hat_LD = mean(z_D_noisy) / phi_cLOS - v_c
-    z_D_mean = float(z_D_noisy.mean())
-    v_hat_L_doppler = z_D_mean / phi_cLOS - vc_norm  # Eq. 51
+    # Use the unresolved blob Doppler measurement (carrier LOS projection), Eq. 49/51
+    z_D_unresolved_noisy = sim["z_D_unresolved_noisy"]
+    v_hat_L_doppler = z_D_unresolved_noisy / phi_cLOS - vc_hat_norm  # Eq. 51
 
-    # --- v_delta from Doppler (Eq. 56) ---
-    # For opposite pairs i and i+n/2: phi_disp[i+n/2] = -phi_disp[i] (Eq. 55)
-    # Difference: z_Di - z_D,i+n/2 = 2*v_delta*phi_disp[i] + noise
-    # Estimate: v_hat_deltaD = (1/n) * sum_{i=1}^{n/2} (z_Di - z_D,i+n/2) / phi_disp[i]
-
-    diffs_D = z_D_noisy[:n_half] - z_D_noisy[n_half:]  # shape (n/2,)  Eq. 54
+    # --- v_delta from Doppler (Eq. 56) — per-target phi (Fix 3) ---
+    diffs_D = z_D_noisy[:n_half] - z_D_noisy[n_half:]  # shape (n/2,)
     phi_half = phi_disp[:n_half]
 
-    # Eq. 56
     v_hat_delta_doppler = float(np.sum(diffs_D / (2.0 * phi_half)) / (n / 2))
 
     return {
@@ -463,7 +423,6 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(14, 9))
 
     configs = [
-        # (ax, vals, true_val, theo_sigma, label, subtitle)
         (
             axes[0, 0],
             mc["v_hat_deltas"],
@@ -529,7 +488,9 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
         ax.grid(True, ls="--", alpha=0.4)
 
     fig.suptitle(
-        f"Monte Carlo ({mc['n_trials']} trials) — Position & Doppler MLE", fontsize=13
+        f"Monte Carlo ({mc['n_trials']} trials) — Position & Doppler MLE\n"
+        f"[Fixes: Eq.33 corrected, noisy carrier estimates, per-target LOS]",
+        fontsize=12,
     )
     plt.tight_layout()
     plt.savefig(outdir / "MC.png", dpi=200)
@@ -749,6 +710,11 @@ def print_table1(p: Params, sigmas: dict, mle: dict, mle_D: dict, mc: dict) -> s
         f"  [Position] v_L:     true={p.v_L:.2f}  est={mle['v_hat_L']:.4f}  err={mle['v_hat_L']-p.v_L:+.4f} m/s",
         f"  [Doppler]  v_delta: true={p.v_delta:.2f}  est={mle_D['v_hat_delta_doppler']:.4f}  err={mle_D['v_hat_delta_doppler']-p.v_delta:+.4f} m/s",
         f"  [Doppler]  v_L:     true={p.v_L:.2f}  est={mle_D['v_hat_L_doppler']:.4f}  err={mle_D['v_hat_L_doppler']-p.v_L:+.4f} m/s",
+        "",
+        "CORRECTIONS APPLIED:",
+        "  Fix 1: Eq.(33) sigma_vdelta_pos = sigma_w / (sqrt(n) * dt)  [was sqrt(2)*sigma_w/(sqrt(n)*dt)]",
+        "  Fix 2: Carrier position/velocity estimates include Gaussian noise (sigma_p, sigma_vc)",
+        "  Fix 3: Per-target LOS vectors used in Eq.(53) phi_disp[i] = 1_vdi . 1_LOS,i",
         "",
     ]
     return "\n".join(lines)
