@@ -17,6 +17,7 @@ from mpl_toolkits.mplot3d import Axes3D
 # Coordinate transforms
 # ---------------------------------------------------------------------------
 
+
 def cart2sph_ENU(xyz: np.ndarray) -> np.ndarray:
     x = xyz[..., 0]
     y = xyz[..., 1]
@@ -48,6 +49,7 @@ def sph2cart_ENU(rae: np.ndarray) -> np.ndarray:
 # Rotation matrices  (Eqs. 7–10)
 # ---------------------------------------------------------------------------
 
+
 def A1(alpha_c: float) -> np.ndarray:
     ca, sa = np.cos(alpha_c), np.sin(alpha_c)
     return np.array([[ca, sa, 0.0], [-sa, ca, 0.0], [0.0, 0.0, 1.0]])
@@ -77,6 +79,7 @@ def A_total(alpha_c: float, eps_c: float) -> np.ndarray:
 # Cartesian noise MSE via linearised Jacobian
 # ---------------------------------------------------------------------------
 
+
 def cartesian_noise_MSE(
     r: float, az: float, el: float, sigma_r: float, sigma_az: float, sigma_el: float
 ) -> float:
@@ -103,6 +106,7 @@ def cartesian_noise_MSE(
 # Simulation parameters  (Section 5)
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Params:
     n: int = 12
@@ -111,7 +115,7 @@ class Params:
     g: float = 9.81
 
     v_delta: float = 20.0  # lateral speed
-    v_L: float = 200.0     # longitudinal speed
+    v_L: float = 200.0  # longitudinal speed
 
     xc_m: tuple = (40e3, 40e3, 40e3)
     vc_mps: tuple = (-3.2e3, 0.0, -3.0e3)
@@ -136,6 +140,7 @@ class Params:
 # ---------------------------------------------------------------------------
 # Core simulation
 # ---------------------------------------------------------------------------
+
 
 def run_sim(p: Params) -> dict:
     rng = np.random.default_rng(p.seed)
@@ -205,8 +210,8 @@ def run_sim(p: Params) -> dict:
     # Noisy carrier estimates (Fix 2)
     xc_hat = xc + rng.normal(0.0, p.sigma_p / np.sqrt(3), size=3)
     vc_hat_norm = np.linalg.norm(vc) + rng.normal(0.0, p.sigma_vc)
-    #vc_hat_vec = vc + rng.normal(0.0, p.sigma_vc / np.sqrt(3), size=3)
-    #vc_hat_norm = np.linalg.norm(vc_hat_vec)
+    # vc_hat_vec = vc + rng.normal(0.0, p.sigma_vc / np.sqrt(3), size=3)
+    # vc_hat_norm = np.linalg.norm(vc_hat_vec)
 
     # LOS geometry
     one_LOS_carrier = xc / np.linalg.norm(xc)
@@ -270,6 +275,7 @@ def run_sim(p: Params) -> dict:
         "vce": vce,
         "sigma_w": sigma_w,
     }
+
 
 # ---------------------------------------------------------------------------
 # Table 1 – theoretical standard deviations  (Eqs. 33, 41, 52, 57)
@@ -363,7 +369,7 @@ def compute_doppler_mle_estimates(p: Params, sim: dict) -> dict:
     phi_cLOS = sim["phi_cLOS"]
     phi_disp = sim["phi_disp"]  # per-target phi values (Fix 3)
     z_D_noisy = sim["z_D_noisy"]
-    vc_hat_norm = sim["vc_hat_norm"]   # noisy carrier speed estimate (Fix 2)
+    vc_hat_norm = sim["vc_hat_norm"]  # noisy carrier speed estimate (Fix 2)
 
     # --- v_L from Doppler (Eq. 51) ---
     # Use the unresolved blob Doppler measurement (carrier LOS projection), Eq. 49/51
@@ -431,6 +437,8 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             sigmas["sigma_vdelta_pos"],
             "$\\hat{v}_\\delta$ (position)",
             "Position-based",
+            r"$\hat{\sigma}_{\hat{v}_\delta}$",
+            r"$\sigma_{\hat{v}_\delta}^{\mathrm{theo}}$",
         ),
         (
             axes[0, 1],
@@ -439,6 +447,8 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             sigmas["sigma_vL_pos"],
             "$\\hat{v}_L$ (position)",
             "Position-based",
+            r"$\hat{\sigma}_{\hat{v}_L}$",
+            r"$\sigma_{\hat{v}_L}^{\mathrm{theo}}$",
         ),
         (
             axes[1, 0],
@@ -447,6 +457,8 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             sigmas["sigma_vdelta_doppler"],
             "$\\hat{v}_\\delta$ (Doppler)",
             "Doppler-based",
+            r"$\hat{\sigma}_{\hat{v}_\delta}$",
+            r"$\sigma_{\hat{v}_\delta}^{\mathrm{theo}}$",
         ),
         (
             axes[1, 1],
@@ -455,10 +467,12 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             sigmas["sigma_vL_doppler"],
             "$\\hat{v}_L$ (Doppler)",
             "Doppler-based",
+            r"$\hat{\sigma}_{\hat{v}_L}$",
+            r"$\sigma_{\hat{v}_L}^{\mathrm{theo}}$",
         ),
     ]
 
-    for ax, vals, true_val, theo_sigma, label, subtitle in configs:
+    for ax, vals, true_val, theo_sigma, label, subtitle, emp_sym, theo_sym in configs:
         ax.hist(vals, bins=40, color="steelblue", alpha=0.7, density=True)
         ax.axvline(
             true_val, color="green", lw=1.5, ls="-", label=f"True = {true_val:.1f}"
@@ -475,7 +489,7 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             color="gray",
             lw=1.0,
             ls=":",
-            label=f"Theo. σ = {theo_sigma:.3f}",
+            label=theo_sym + f" = {theo_sigma:.3f}",
         )
         ax.axvline(true_val - theo_sigma, color="gray", lw=1.0, ls=":")
 
@@ -483,16 +497,14 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
         ax.set_ylabel("Density")
         ax.set_title(
             f"{subtitle} — {label}\n"
-            f"emp. σ = {vals.std():.4f},  theo. σ = {theo_sigma:.4f} m/s"
+            + emp_sym
+            + f" $= {vals.std():.4f}$,  "
+            + theo_sym
+            + f" $= {theo_sigma:.4f}$ m/s"
         )
         ax.legend(fontsize=8)
         ax.grid(True, ls="--", alpha=0.4)
 
-    fig.suptitle(
-        f"Monte Carlo ({mc['n_trials']} trials) — Position & Doppler MLE\n"
-        f"[Fixes: Eq.33 corrected, noisy carrier estimates, per-target LOS]",
-        fontsize=12,
-    )
     plt.tight_layout()
     plt.savefig(outdir / "MC.png", dpi=200)
     plt.close(fig)
@@ -596,10 +608,10 @@ def plot_R1(outdir: Path, sim: dict) -> None:
 
     ax.set_xlabel("Azimuth (mrad)")
     ax.set_ylabel("Elevation (mrad)")
-    ax.set_title(
-        "R1 – Ejected objects at $t_\\rho = 1\\,$s\n"
-        "(true = circles, noisy = crosses, centre = star)"
-    )
+    #   ax.set_title(
+    #       "R1 – Ejected objects at $t_\\rho = 1\\,$s\n"
+    #       "(true = circles, noisy = crosses, centre = star)"
+    #   )
     ax.legend(fontsize=9)
     ax.grid(True, linestyle="--", alpha=0.5)
 
@@ -646,9 +658,9 @@ def plot_R3(outdir: Path, sim: dict) -> None:
     ax.set_xlabel("East (km)")
     ax.set_ylabel("North (km)")
     ax.set_zlabel("Up (km)")
-    ax.set_title(
-        "R3 – 3D positions at $t_\\rho = 1\\,$s\n" "(carrier = X, objects = circles)"
-    )
+    #   ax.set_title(
+    #       "R3 – 3D positions at $t_\\rho = 1\\,$s\n" "(carrier = X, objects = circles)"
+    #   )
     ax.legend(fontsize=9)
 
     plt.tight_layout()
