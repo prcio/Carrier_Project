@@ -22,10 +22,10 @@ Table 1 – Speed estimate standard deviations (m/s)
 ================================================================================
 Method                                  v_delta theo   v_delta emp      v_L theo       v_L emp
 --------------------------------------------------------------------------------
-Position meas. (Eq 33,41)                     3.9584        2.2600        8.1036        6.1792
+Position meas. (Eq 33,41)                     2.8868        2.2600        7.6376        6.1792
 Doppler meas. (Eq 57,52)                      3.9632        4.0006        5.1480        5.2051
 --------------------------------------------------------------------------------
-Baseline 2-pt diff. (Eq 34)                  19.3920           N/A       19.3920           N/A
+Baseline 2-pt diff. (Eq 34)                  14.1421           N/A       14.1421           N/A
 
   MC trials = 1000   |   mean v_delta = 21.5193 m/s  (true = 20.00)   |   mean v_L = 203.3921 m/s  (true = 200.00)
   Doppler MC: mean v_delta_D = 20.9100 m/s   |   mean v_L_D = 199.9571 m/s
@@ -54,7 +54,7 @@ True value (m/s)                            20.0000     200.0000
   --- Position-based ---
 MC mean (m/s)                               21.5193     203.3921
 Empirical std (m/s)                          2.2600       6.1792
-Theoretical std (m/s)                        3.9584       8.1036
+Theoretical std (m/s)                        2.8868       7.6376
 
   --- Doppler-based ---
 MC mean (m/s)                               20.9100     199.9571

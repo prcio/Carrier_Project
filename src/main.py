@@ -231,16 +231,17 @@ def run_sim(p: Params) -> dict:
     z_Dc_after_noisy = vce * phi_cLOS + rng.normal(0.0, p.sigma_D)
 
     # Representative Cartesian noise level sigma_w
-    r_mean = float(u_obj_true[:, 0].mean())
-    az_mean = float(u_obj_true[:, 1].mean())
-    el_mean = float(u_obj_true[:, 2].mean())
-    sigma_w = float(
-        np.sqrt(
-            cartesian_noise_MSE(
-                r_mean, az_mean, el_mean, p.sigma_r, p.sigma_az, p.sigma_el
-            )
-        )
-    )
+ #   r_mean = float(u_obj_true[:, 0].mean())
+ #   az_mean = float(u_obj_true[:, 1].mean())
+ #   el_mean = float(u_obj_true[:, 2].mean())
+ #   sigma_w = float(
+ #       np.sqrt(
+ #           cartesian_noise_MSE(
+ #               r_mean, az_mean, el_mean, p.sigma_r, p.sigma_az, p.sigma_el
+ #           )
+ #       )
+ #   )
+    sigma_w = 10 #m
 
     return {
         "params": asdict(p),
