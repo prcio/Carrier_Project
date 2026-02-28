@@ -231,17 +231,17 @@ def run_sim(p: Params) -> dict:
     z_Dc_after_noisy = vce * phi_cLOS + rng.normal(0.0, p.sigma_D)
 
     # Representative Cartesian noise level sigma_w
- #   r_mean = float(u_obj_true[:, 0].mean())
- #   az_mean = float(u_obj_true[:, 1].mean())
- #   el_mean = float(u_obj_true[:, 2].mean())
- #   sigma_w = float(
- #       np.sqrt(
- #           cartesian_noise_MSE(
- #               r_mean, az_mean, el_mean, p.sigma_r, p.sigma_az, p.sigma_el
- #           )
- #       )
- #   )
-    sigma_w = 10 #m
+    #   r_mean = float(u_obj_true[:, 0].mean())
+    #   az_mean = float(u_obj_true[:, 1].mean())
+    #   el_mean = float(u_obj_true[:, 2].mean())
+    #   sigma_w = float(
+    #       np.sqrt(
+    #           cartesian_noise_MSE(
+    #               r_mean, az_mean, el_mean, p.sigma_r, p.sigma_az, p.sigma_el
+    #           )
+    #       )
+    #   )
+    sigma_w = 10  # m
 
     return {
         "params": asdict(p),
@@ -436,44 +436,58 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             mc["v_hat_deltas"],
             p.v_delta,
             sigmas["sigma_vdelta_pos"],
-            "$\\hat{v}_\\delta$ (position)",
+            "$\\hat{v}_\\delta$",
             "Position-based",
             r"$\hat{\sigma}_{\hat{v}_\delta}$",
-            r"$\sigma_{\hat{v}_\delta}^{\mathrm{theo}}$",
+            r"$\sigma_{\hat{v}_\delta}$",
+            "Dispersion Speed Histogram",
         ),
         (
             axes[0, 1],
             mc["v_hat_Ls"],
             p.v_L,
             sigmas["sigma_vL_pos"],
-            "$\\hat{v}_L$ (position)",
+            "$\\hat{v}_L$",
             "Position-based",
             r"$\hat{\sigma}_{\hat{v}_L}$",
-            r"$\sigma_{\hat{v}_L}^{\mathrm{theo}}$",
+            r"$\sigma_{\hat{v}_L}$",
+            "Longitudinal Speed Histogram",
         ),
         (
             axes[1, 0],
             mc["v_hat_deltas_D"],
             p.v_delta,
             sigmas["sigma_vdelta_doppler"],
-            "$\\hat{v}_\\delta$ (Doppler)",
+            "$\\hat{v}_{\\delta D}$",
             "Doppler-based",
-            r"$\hat{\sigma}_{\hat{v}_\delta}$",
-            r"$\sigma_{\hat{v}_\delta}^{\mathrm{theo}}$",
+            r"$\hat{\sigma}_{\delta}$",
+            r"$\sigma_{\hat{v}_{\delta D}}$",
+            "Dispersion Speed Histogram",
         ),
         (
             axes[1, 1],
             mc["v_hat_Ls_D"],
             p.v_L,
             sigmas["sigma_vL_doppler"],
-            "$\\hat{v}_L$ (Doppler)",
+            "$\\hat{v}_{L D}$",
             "Doppler-based",
-            r"$\hat{\sigma}_{\hat{v}_L}$",
-            r"$\sigma_{\hat{v}_L}^{\mathrm{theo}}$",
+            r"$\hat{\sigma}_{\hat{v}_{LD}}$",
+            r"$\sigma_{\hat{v}_{LD}}$",
+            "Longitudinal Speed Histogram",
         ),
     ]
 
-    for ax, vals, true_val, theo_sigma, label, subtitle, emp_sym, theo_sym in configs:
+    for (
+        ax,
+        vals,
+        true_val,
+        theo_sigma,
+        label,
+        subtitle,
+        emp_sym,
+        theo_sym,
+        y_label,
+    ) in configs:
         ax.hist(vals, bins=40, color="steelblue", alpha=0.7, density=True)
         ax.axvline(
             true_val, color="green", lw=1.5, ls="-", label=f"True = {true_val:.1f}"
@@ -490,18 +504,18 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             color="gray",
             lw=1.0,
             ls=":",
-            label=theo_sym + f" = {theo_sigma:.3f}",
+            label=theo_sym,
         )
         ax.axvline(true_val - theo_sigma, color="gray", lw=1.0, ls=":")
 
         ax.set_xlabel(f"{label} (m/s)")
-        ax.set_ylabel("Density")
+        ax.set_ylabel(y_label)
         ax.set_title(
             f"{subtitle} — {label}\n"
             + emp_sym
-            + f" $= {vals.std():.4f}$,  "
+            + f" $= {vals.std():.2f}$,  "
             + theo_sym
-            + f" $= {theo_sigma:.4f}$ m/s"
+            + f" $= {theo_sigma:.2f}$ m/s"
         )
         ax.legend(fontsize=8)
         ax.grid(True, ls="--", alpha=0.4)
