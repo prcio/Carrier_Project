@@ -439,8 +439,9 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             "$\\hat{v}_\\delta$",
             "Position-based",
             r"$\hat{\sigma}_{\hat{v}_\delta}$",
-            r"$\sigma_{\hat{v}_\delta}$",
+            r"$\sigma_{v_\delta}$",
             "Dispersion Speed Histogram",
+            "$(33)$",
         ),
         (
             axes[0, 1],
@@ -450,8 +451,9 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             "$\\hat{v}_L$",
             "Position-based",
             r"$\hat{\sigma}_{\hat{v}_L}$",
-            r"$\sigma_{\hat{v}_L}$",
+            r"$\sigma_{\hat{v}_L}$ $(41)$",
             "Longitudinal Speed Histogram",
+            "$(41)$",
         ),
         (
             axes[1, 0],
@@ -461,8 +463,9 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             "$\\hat{v}_{\\delta D}$",
             "Doppler-based",
             r"$\hat{\sigma}_{\delta}$",
-            r"$\sigma_{\hat{v}_{\delta D}}$",
+            r"$\sigma_{v_{\delta D}}$",
             "Dispersion Speed Histogram",
+            "$(57)$",
         ),
         (
             axes[1, 1],
@@ -474,6 +477,7 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             r"$\hat{\sigma}_{\hat{v}_{LD}}$",
             r"$\sigma_{\hat{v}_{LD}}$",
             "Longitudinal Speed Histogram",
+            "$(52)$",
         ),
     ]
 
@@ -487,6 +491,7 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
         emp_sym,
         theo_sym,
         y_label,
+        eq,
     ) in configs:
         ax.hist(vals, bins=40, color="steelblue", alpha=0.7, density=True)
         ax.axvline(
@@ -515,7 +520,7 @@ def plot_mc(outdir: Path, p: Params, mc: dict, sigmas: dict) -> None:
             + emp_sym
             + f" $= {vals.std():.2f}$,  "
             + theo_sym
-            + f" $= {theo_sigma:.2f}$ m/s"
+            + f" $= {theo_sigma:.2f}$ m/s {eq}"
         )
         ax.legend(fontsize=8)
         ax.grid(True, ls="--", alpha=0.4)
